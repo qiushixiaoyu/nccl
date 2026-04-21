@@ -46,6 +46,7 @@ error:
 int ncclCuMemEnable() {
   // NCCL_CUMEM_ENABLE=-2 means auto-detect CUMEM support
   int param = ncclParamCuMemEnable();
+  // printf("param is %d\n", param);
   return  param >= 0 ? param : (param == -2 && ncclCuMemSupported);
 }
 
@@ -288,6 +289,7 @@ static void initOnceFunc() {
 
   // Determine whether we support the cuMem APIs or not
   ncclCuMemSupported = ncclIsCuMemSupported();
+  // printf("ncclIsCuMemSupported %d\n", ncclCuMemSupported);
 
   /* To use cuMem* for host memory allocation, we need to create context on each visible device.
    * This is a workaround needed in CUDA 12.2 and CUDA 12.3 which is fixed in 12.4. */

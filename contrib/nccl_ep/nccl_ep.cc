@@ -1329,6 +1329,7 @@ ncclResult_t ncclEpTensorCreate(
         total_size *= sizes[i];
     }
 
+    printf("total_size is %u, ncclTypeSize(datatype) is %zu\n", total_size, ncclTypeSize(datatype));
     CUDA_CHECK(ep_group->alloc_fn(&tensor->data, total_size * ncclTypeSize(datatype)));
     return ncclSuccess;
 }

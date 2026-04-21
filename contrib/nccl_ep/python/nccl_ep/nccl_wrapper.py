@@ -202,13 +202,21 @@ class NCCLLibrary:
         Function("ncclEpComplete", ncclResult_t, [
             ncclEpHandle_t, ctypes.c_void_p, cudaStream_t
         ]),
+        Function("ncclEpTensorCreate", ncclResult_t, [
+            ncclEpGroup_t, ctypes.POINTER(ncclNDTensor_t),
+            ctypes.c_uint, ncclDataType_t, ctypes.c_uint,
+            ctypes.c_uint, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint
+        ]),
+        Function("ncclEpTensorDestroy", ncclResult_t, [
+            ncclEpGroup_t, ctypes.POINTER(ncclNDTensor_t)
+        ]),
     ]
 
     ep_function_names = [
         "ncclEpCreateGroup", "ncclEpGroupDestroy",
         "ncclEpCreateHandle", "ncclEpHandleDestroy",
         "ncclEpDispatch", "ncclEpCombine", "ncclEpHandleGetNumRecvTokens",
-        "ncclEpComplete"
+        "ncclEpComplete", "ncclEpTensorCreate", "ncclEpTensorDestroy"
     ]
 
     path_to_library_cache = {}
@@ -217,6 +225,7 @@ class NCCLLibrary:
     _nccl_base_lib_path = None  # Path to base NCCL library
 
     def __init__(self, so_file=None):
+        print(f"Initializing NCCLLibrary with so_file={so_file}")
         if so_file is None:
             so_file = self._find_nccl_library()
 
@@ -509,6 +518,72 @@ class NCCLLibrary:
             raise RuntimeError("NCCL EP not available")
         self.NCCL_CHECK(self._funcs["ncclEpComplete"](handle, None, stream))
 
+    def ncclEpTensorCreate(self, ep_group, ndim, datatype, tag, data,
+                           size0, size1=1, size2=1, size3=1, size4=1):
+        """Create an opaque NCCL-EP tensor handle.
+
+        When data is non-null, wraps user-provided memory without ownership.
+        When data is None/NULL, the library allocates memory internally.
+
+        Returns:
+            ncclNDTensor_t: Opaque tensor handle
+        """
+        if not self.ep_available:
+            raise RuntimeError("NCCL EP not available")
+
+        tensor = ncclNDTensor_t()
+        sizes = [int(size0), int(size1), int(size2), int(size3), int(size4)]
+
+        raw_data = data.value if isinstance(data, ctypes.c_void_p) else data
+
+        if raw_data is None:
+            self.NCCL_CHECK(self._funcs["ncclEpTensorCreate"](
+                ep_group, ctypes.byref(tensor),
+                ndim, datatype, tag,
+                sizes[0], sizes[1], sizes[2], sizes[3], sizes[4]
+            ))
+            tensor._ep_wraps_external_data = False
+            return tensor
+
+        ndim = int(ndim)
+        if ndim <= 0 or ndim > 5:
+            raise ValueError(f"ndim must be in [1, 5], got {ndim}")
+
+        sizes_buffer = (ctypes.c_uint * ndim)(*sizes[:ndim])
+        strides = [1] * ndim
+        strides_buffer = (ctypes.c_uint * ndim)(*strides)
+
+        tensor.version = 1
+        tensor.ndim = ndim
+        tensor.sizes = ctypes.cast(sizes_buffer, ctypes.POINTER(ctypes.c_uint))
+        tensor.strides = ctypes.cast(strides_buffer, ctypes.POINTER(ctypes.c_uint))
+        tensor.datatype = datatype
+        tensor.data = ctypes.c_void_p(int(raw_data))
+        tensor.tag = tag
+        tensor.flags = ncclEpTensorFlags_t.NCCL_EP_TENSOR_FLAG_NONE
+
+        # Keep metadata buffers alive for the lifetime of the ctypes structure.
+        tensor._ep_sizes_buffer = sizes_buffer
+        tensor._ep_strides_buffer = strides_buffer
+        tensor._ep_wraps_external_data = True
+        return tensor
+
+    def ncclEpTensorDestroy(self, ep_group, tensor):
+        """Destroy an NCCL-EP tensor handle.
+
+        If the tensor wraps user-provided data, only the handle is freed.
+        """
+        if not self.ep_available:
+            raise RuntimeError("NCCL EP not available")
+
+        if getattr(tensor, "_ep_wraps_external_data", False):
+            tensor.data = ctypes.c_void_p()
+            tensor.sizes = ctypes.POINTER(ctypes.c_uint)()
+            tensor.strides = ctypes.POINTER(ctypes.c_uint)()
+            tensor._ep_wraps_external_data = False
+            return
+
+        self.NCCL_CHECK(self._funcs["ncclEpTensorDestroy"](ep_group, ctypes.byref(tensor)))
 
 def get_nccl_comm_from_group(group=None, nccl_lib: Optional['NCCLLibrary'] = None) -> ncclComm_t:
     """Create NCCL communicator for the given ProcessGroup.
