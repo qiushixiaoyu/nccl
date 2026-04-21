@@ -236,6 +236,7 @@ class NCCLLibrary:
     _nccl_base_lib_path = None  # Path to base NCCL library
 
     def __init__(self, so_file=None):
+        print(f"Initializing NCCLLibrary with so_file={so_file}")
         if so_file is None:
             so_file = self._find_nccl_library()
 
@@ -528,6 +529,34 @@ class NCCLLibrary:
             raise RuntimeError("NCCL EP not available")
         self.NCCL_CHECK(self._funcs["ncclEpComplete"](handle, None, stream))
 
+    def ncclEpTensorCreate(self, ep_group, ndim, datatype, tag, data,
+                           size0, size1=1, size2=1, size3=1, size4=1):
+        """Create an opaque NCCL-EP tensor handle.
+
+        When data is non-null, wraps user-provided memory without ownership.
+        When data is None/NULL, the library allocates memory internally.
+
+        Returns:
+            ncclNDTensor_t: Opaque tensor handle
+        """
+        if not self.ep_available:
+            raise RuntimeError("NCCL EP not available")
+        tensor = ncclNDTensor_t()
+        self.NCCL_CHECK(self._funcs["ncclEpTensorCreate"](
+            ep_group, ctypes.byref(tensor),
+            ndim, datatype, tag, data,
+            size0, size1, size2, size3, size4
+        ))
+        return tensor
+
+    def ncclEpTensorDestroy(self, ep_group, tensor):
+        """Destroy an NCCL-EP tensor handle.
+
+        If the tensor wraps user-provided data, only the handle is freed.
+        """
+        if not self.ep_available:
+            raise RuntimeError("NCCL EP not available")
+        self.NCCL_CHECK(self._funcs["ncclEpTensorDestroy"](ep_group, tensor))
 
 def get_nccl_comm_from_group(group=None, nccl_lib: Optional['NCCLLibrary'] = None) -> ncclComm_t:
     """Create NCCL communicator for the given ProcessGroup.

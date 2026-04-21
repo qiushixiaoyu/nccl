@@ -1612,6 +1612,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   }
   comm->globalRmaProxySupport = globalRmaPluginSupport && globalCrossNicSupport && !globalNicFused && globalCuMemGdrSupport;
   isOneLsaTeams = ncclDevrIsOneLsaTeam(comm);
+  printf("comm->isAllCudaP2p %d ncclParamWinEnable() %ld ncclCuMemEnable() %d comm->globalGinSupport %d isOneLsaTeams %d\n",
+        comm->isAllCudaP2p, ncclParamWinEnable(), ncclCuMemEnable(), comm->globalGinSupport, isOneLsaTeams);
   comm->symmetricSupport = comm->isAllCudaP2p && ncclParamWinEnable() && ncclCuMemEnable() && (comm->globalGinSupport != NCCL_GIN_CONNECTION_NONE || isOneLsaTeams);
   comm->hostRmaSupport = comm->symmetricSupport && (isOneLsaTeams || comm->globalRmaProxySupport);
   if (!comm->symmetricSupport) {

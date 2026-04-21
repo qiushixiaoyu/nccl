@@ -23,20 +23,30 @@ static int ncclCuMemSupported = 0;
 // Determine whether CUMEM & VMM RDMA is supported on this platform
 int ncclIsCuMemSupported() {
 #if CUDART_VERSION < 11030 || defined (NCCL_OS_WINDOWS)
+  // printf("__function__ %s, __LINE__ %d\n", __func__, __LINE__);
   return 0;
 #else
+  // printf("__function__ %s, __LINE__ %d\n", __func__, __LINE__);
   CUdevice currentDev;
   int cudaDev;
   int cudaDriverVersion;
   int flag = 0;
   ncclResult_t ret = ncclSuccess;
+  // printf("__function__ %s, __LINE__ %d\n", __func__, __LINE__);
   CUDACHECKGOTO(cudaDriverGetVersion(&cudaDriverVersion), ret, error);
+  // printf("__function__ %s, __LINE__ %d\n", __func__, __LINE__);
   if (cudaDriverVersion < 12000) return 0;  // Need CUDA_VISIBLE_DEVICES support
+  // printf("__function__ %s, __LINE__ %d\n", __func__, __LINE__);
   CUDACHECKGOTO(cudaGetDevice(&cudaDev), ret, error);
+  // printf("__function__ %s, __LINE__ %d\n", __func__, __LINE__);
   if (CUPFN(cuMemCreate) == NULL) return 0;
+  // printf("__function__ %s, __LINE__ %d\n", __func__, __LINE__);
   CUCHECKGOTO(cuDeviceGet(&currentDev, cudaDev), ret, error);
+  // printf("__function__ %s, __LINE__ %d\n", __func__, __LINE__);
   // Query device to see if CUMEM VMM support is available
+  // printf("__function__ %s, __LINE__ %d\n", __func__, __LINE__);
   CUCHECKGOTO(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED, currentDev), ret, error);
+  // printf("__function__ %s, __LINE__ %d, flag is %d\n", __func__, __LINE__, flag);
   if (!flag) return 0;
 error:
   return (ret == ncclSuccess);
@@ -46,6 +56,7 @@ error:
 int ncclCuMemEnable() {
   // NCCL_CUMEM_ENABLE=-2 means auto-detect CUMEM support
   int param = ncclParamCuMemEnable();
+  // printf("param is %d\n", param);
   return  param >= 0 ? param : (param == -2 && ncclCuMemSupported);
 }
 
@@ -288,6 +299,7 @@ static void initOnceFunc() {
 
   // Determine whether we support the cuMem APIs or not
   ncclCuMemSupported = ncclIsCuMemSupported();
+  // printf("ncclIsCuMemSupported %d\n", ncclCuMemSupported);
 
   /* To use cuMem* for host memory allocation, we need to create context on each visible device.
    * This is a workaround needed in CUDA 12.2 and CUDA 12.3 which is fixed in 12.4. */
